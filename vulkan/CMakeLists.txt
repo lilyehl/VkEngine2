@@ -2,10 +2,7 @@
 #add_library(VulkanCppModule)
 #add_library(Vulkan::cppm ALIAS VulkanCppModule)
 #
-#target_compile_definitions(VulkanCppModule PUBLIC
-#        VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
-#        VULKAN_HPP_NO_STRUCT_CONSTRUCTORS=1
-#)
+
 #
 #target_include_directories(VulkanCppModule PRIVATE "${Vulkan_INCLUDE_DIR}")
 #target_link_libraries(VulkanCppModule PUBLIC Vulkan::Vulkan)
@@ -21,6 +18,11 @@
 
 # set up my wrapper
 add_library(vk_wrapper STATIC)
+
+target_compile_definitions(vk_wrapper PUBLIC
+        VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
+        VULKAN_HPP_NO_STRUCT_CONSTRUCTORS=1
+)
 
 target_sources(vk_wrapper
     PRIVATE

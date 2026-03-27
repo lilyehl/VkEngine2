@@ -2,8 +2,4 @@
 #include <iostream>
 #include <vulkan/vulkan.hpp>
 
-namespace vkengine {
-
-void init() { std::cout << "Wrapper created Vulkan instance\n"; }
-
-} // namespace vkengine
+void VkEngine::init(GLFWwindow &window) { std::cout << "Wrapper created\n"; }
