@@ -5,7 +5,8 @@ project(vkEngine)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_CXX_COMPILER clang++)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+#set(CMAKE_CXX_COMPILER clang++)
 
 find_package(Vulkan REQUIRED)
 
@@ -29,7 +30,6 @@ function (add_slang_shader_target TARGET)
   add_custom_target (${TARGET} DEPENDS ${SHADERS_DIR}/slang.spv)
 endfunction()
 
-add_subdirectory(vulkan)
-add_subdirectory(example)
-#add_subdirectory(dep)
+add_subdirectory(src)
+add_subdirectory(dep)
 

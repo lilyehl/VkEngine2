@@ -1,9 +1,7 @@
 #pragma once
 #include "utils.hpp"
 #include "vk_context.hpp"
-#include "vulkan/vulkan.hpp"
 #include <GLFW/glfw3.h>
-#include <vulkan/vulkan_raii.hpp>
 
 class Swapchain {
 public:
@@ -19,6 +17,9 @@ public:
   }
   const std::vector<vk::Image> &get_images() const { return swapChainImages; }
   const vk::raii::SwapchainKHR &get_swapchain() const { return swapChain; }
+
+  void cleanup();
+  void recreate_swapchain(const VkContext &vkContext, GLFWwindow *window);
 
 private:
   vk::raii::SwapchainKHR swapChain = nullptr;

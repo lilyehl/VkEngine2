@@ -1,6 +1,6 @@
 #pragma once
 
-#include <utils.hpp>
+#include "utils.hpp"
 
 const std::vector<char const *> validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -39,4 +39,8 @@ public:
 
   VkContext() = default;
   VkContext(GLFWwindow *window);
+
+  // buffer allocation helper
+  uint32_t find_memory_type(uint32_t typeFilter,
+                            vk::MemoryPropertyFlags properties);
 };

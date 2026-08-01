@@ -209,3 +209,22 @@ void VkContext::create_command_pool() {
       .queueFamilyIndex = queueIndex};
   commandPool = vk::raii::CommandPool(device, poolInfo);
 }
+
+uint32_t VkContext::find_memory_type(uint32_t typeFilter,
+                                     vk::MemoryPropertyFlags properties)
+// finds memory type for a buffer according to app recquirements
+{
+  // query for available types of memory
+  vk::PhysicalDeviceMemoryProperties memProperties =
+      physicalDevice.getMemoryProperties();
+
+  // return memory that is suitable for buffer
+  for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+    if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags &
+                                    properties) == properties) {
+      return i;
+    }
+  }
+
+  throw std::runtime_error("failed to find suitable memory type!");
+}

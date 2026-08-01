@@ -1,8 +1,7 @@
 #include "vk_pipeline.hpp"
 #include "fstream"
-#include "vulkan/vulkan.hpp"
 
-// helper function (move to utils.hpp ?)
+// helper function
 static vk::raii::ShaderModule
 load_shader_module(const std::string &spvShader,
                    const vk::raii::Device &device) {
@@ -29,8 +28,9 @@ load_shader_module(const std::string &spvShader,
 
 // ------ Building pipeline ----
 
-vk::raii::Pipeline PipelineBuilder::build(VkContext &vkContext,
-                                          Swapchain &swapchain) {
+vk::raii::Pipeline
+PipelineBuilder::build(VkContext &vkContext, Swapchain &swapchain,
+                       vk::raii::PipelineLayout &pipelineLayout) {
 
   // load shaders
   auto shaderModule = load_shader_module("shaders/slang.spv", vkContext.device);
@@ -46,7 +46,15 @@ vk::raii::Pipeline PipelineBuilder::build(VkContext &vkContext,
                                                       fragShaderStageInfo};
 
   // vertex stage
-  vk::PipelineVertexInputStateCreateInfo vertexInputInfo; // temp;
+  auto bindingDescription = Vertex::getBindingDescription();
+  auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+  vk::PipelineVertexInputStateCreateInfo vertexInputInfo{
+      .vertexBindingDescriptionCount = 1,
+      .pVertexBindingDescriptions = &bindingDescription,
+      .vertexAttributeDescriptionCount =
+          static_cast<uint32_t>(attributeDescriptions.size()),
+      .pVertexAttributeDescriptions = attributeDescriptions.data()};
 
   // topology
   vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
@@ -81,7 +89,7 @@ vk::raii::Pipeline PipelineBuilder::build(VkContext &vkContext,
       .rasterizerDiscardEnable = vk::False,
       .polygonMode = vk::PolygonMode::eFill,
       .cullMode = vk::CullModeFlagBits::eBack,
-      .frontFace = vk::FrontFace::eClockwise,
+      .frontFace = vk::FrontFace::eCounterClockwise,
       .depthBiasEnable = vk::False,
       .lineWidth = 1.0f};
 
@@ -112,11 +120,6 @@ vk::raii::Pipeline PipelineBuilder::build(VkContext &vkContext,
   // pipeline layout
   // specify uniform variables and push constants
   // TODO : add setter for pipeline layout
-  vk::PipelineLayoutCreateInfo pipelineLayoutInfo{.setLayoutCount = 0,
-                                                  .pushConstantRangeCount = 0};
-
-  pipelineLayout =
-      vk::raii::PipelineLayout(vkContext.device, pipelineLayoutInfo);
 
   // dynamic rendering
   vk::Format colorFormat = swapchain.get_surface_format().format;
@@ -147,7 +150,8 @@ vk::raii::Pipeline PipelineBuilder::build(VkContext &vkContext,
 }
 
 // ---- setters
-// PipelineBuilder &PipelineBuilder::setTopology(vk::PrimitiveTopology topology)
+// PipelineBuilder &PipelineBuilder::setTopology(vk::PrimitiveTopology
+// topology)
 // {
 //  this->topology = topology;
 //

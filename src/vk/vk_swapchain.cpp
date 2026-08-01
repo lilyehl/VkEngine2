@@ -107,3 +107,24 @@ void Swapchain::create_image_views(const VkContext &vkContext) {
     swapChainImageViews.emplace_back(vkContext.device, imageViewCreateInfo);
   }
 }
+
+void Swapchain::recreate_swapchain(const VkContext &vkContext,
+                                   GLFWwindow *window) {
+  int width = 0, height = 0;
+  glfwGetFramebufferSize(window, &width, &height);
+  while (width == 0 || height == 0) {
+    glfwGetFramebufferSize(window, &width, &height);
+    glfwWaitEvents();
+  }
+  vkContext.device.waitIdle();
+
+  cleanup();
+
+  create_swapchain(vkContext, window);
+  create_image_views(vkContext);
+}
+
+void Swapchain::cleanup() {
+  swapChainImageViews.clear();
+  swapChain = nullptr;
+}
