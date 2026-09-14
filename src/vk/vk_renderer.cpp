@@ -51,14 +51,16 @@ void VkRenderer::wait_idle() {
 
 void VkRenderer::draw(Window &window, Camera *camera) {
 
+  // wait for GPU to finish w/ the semaphore and frame buffer
   auto fenceResult = vkContext.device.waitForFences(*inFlightFences[frameIndex],
                                                     vk::True, UINT64_MAX);
   if (fenceResult != vk::Result::eSuccess) {
     throw std::runtime_error("failed to wait for fence!");
   }
 
+  // get next available image in swapchain, give it to present semaphore
   auto [result, imageIndex] = swapchain.get_swapchain().acquireNextImage(
-      UINT64_MAX, *presentCompleteSemaphores[frameIndex], nullptr);
+      UINT64_MAX, *acquireSemaphores[frameIndex], nullptr);
 
   if ((result == vk::Result::eSuboptimalKHR) ||
       (result == vk::Result::eErrorOutOfDateKHR)) {
@@ -72,31 +74,38 @@ void VkRenderer::draw(Window &window, Camera *camera) {
     throw std::runtime_error("failed to acquire swap chain image!");
   }
 
+  // if all goes well, we are submitting during this frame
+  // reset fences and command buffer
   vkContext.device.resetFences(*inFlightFences[frameIndex]);
   commandBuffers[frameIndex].reset();
+
   record_command_buffer(imageIndex);
 
   // TEMPORARY
   updateUniformBuffer(frameIndex, camera);
 
+  // submit command buffer to graphics queue
   vk::PipelineStageFlags waitDestinationStageMask(
       vk::PipelineStageFlagBits::eColorAttachmentOutput);
+
   const vk::SubmitInfo submitInfo{
       .waitSemaphoreCount = 1,
-      .pWaitSemaphores = &*presentCompleteSemaphores[frameIndex],
+      .pWaitSemaphores = &*acquireSemaphores[frameIndex],
       .pWaitDstStageMask = &waitDestinationStageMask,
       .commandBufferCount = 1,
       .pCommandBuffers = &*commandBuffers[frameIndex],
       .signalSemaphoreCount = 1,
-      .pSignalSemaphores = &*renderFinishedSemaphores[imageIndex]};
+      .pSignalSemaphores = &*submitSemaphores[imageIndex]};
   vkContext.queue.submit(submitInfo, *inFlightFences[frameIndex]);
 
+  // present rendered info
   const vk::PresentInfoKHR presentInfoKHR{
       .waitSemaphoreCount = 1,
-      .pWaitSemaphores = &*renderFinishedSemaphores[imageIndex],
+      .pWaitSemaphores = &*submitSemaphores[imageIndex],
       .swapchainCount = 1,
       .pSwapchains = &*swapchain.get_swapchain(),
       .pImageIndices = &imageIndex};
+
   result = vkContext.queue.presentKHR(presentInfoKHR);
   if ((result == vk::Result::eSuboptimalKHR) ||
       (result == vk::Result::eErrorOutOfDateKHR) || framebufferResized) {
@@ -108,6 +117,7 @@ void VkRenderer::draw(Window &window, Camera *camera) {
     assert(result == vk::Result::eSuccess);
   }
 
+  // move to next next frame in flight
   frameIndex = (frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
@@ -126,22 +136,57 @@ void VkRenderer::record_command_buffer(uint32_t imageIndex) {
   // Before starting rendering, transition the swapchain image to
   // vk::ImageLayout::eColorAttachmentOptimal
   transition_image_layout(
-      imageIndex, vk::ImageLayout::eUndefined,
+      swapchain.get_images()[imageIndex], vk::ImageLayout::eUndefined,
       vk::ImageLayout::eColorAttachmentOptimal,
       {}, // srcAccessMask (no need to wait for previous operations)
       vk::AccessFlagBits2::eColorAttachmentWrite,         // dstAccessMask
       vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
-      vk::PipelineStageFlagBits2::eColorAttachmentOutput  // dstStage
-  );
+      vk::PipelineStageFlagBits2::eColorAttachmentOutput, // dstStage
+      vk::ImageAspectFlagBits::eColor);
 
-  // color attachement
+  // Transition the multisampled color image to
+  // vk::ImageLayout::eColorAttachmentOptimal
+  transition_image_layout(*(swapchain.get_color_image()),
+                          vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eColorAttachmentOptimal,
+                          vk::AccessFlagBits2::eColorAttachmentWrite,
+                          vk::AccessFlagBits2::eColorAttachmentWrite,
+                          vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+                          vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+                          vk::ImageAspectFlagBits::eColor);
+
+  // Transition depth image to depth attachment optimal layout
+  transition_image_layout(*(swapchain.get_depth_image()),
+                          vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eDepthAttachmentOptimal,
+                          vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+                          vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+                          vk::PipelineStageFlagBits2::eEarlyFragmentTests |
+                              vk::PipelineStageFlagBits2::eLateFragmentTests,
+                          vk::PipelineStageFlagBits2::eEarlyFragmentTests |
+                              vk::PipelineStageFlagBits2::eLateFragmentTests,
+                          vk::ImageAspectFlagBits::eDepth);
+
+  // color attachment (multisampled) with resolve attachment
   vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
-  vk::RenderingAttachmentInfo attachmentInfo = {
-      .imageView = swapchain.get_image_views()[imageIndex],
+  vk::RenderingAttachmentInfo colorAttachment = {
+      .imageView = swapchain.get_color_image_view(),
       .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+      .resolveMode = vk::ResolveModeFlagBits::eAverage,
+      .resolveImageView = swapchain.get_image_views()[imageIndex],
+      .resolveImageLayout = vk::ImageLayout::eColorAttachmentOptimal,
       .loadOp = vk::AttachmentLoadOp::eClear,
       .storeOp = vk::AttachmentStoreOp::eStore,
       .clearValue = clearColor};
+
+  // depth buffering
+  vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
+  vk::RenderingAttachmentInfo depthAttachment = {
+      .imageView = swapchain.get_depth_image_view(),
+      .imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
+      .loadOp = vk::AttachmentLoadOp::eClear,
+      .storeOp = vk::AttachmentStoreOp::eDontCare,
+      .clearValue = clearDepth};
 
   // rendering info
   auto extent = swapchain.get_extent();
@@ -149,7 +194,8 @@ void VkRenderer::record_command_buffer(uint32_t imageIndex) {
       .renderArea = {.offset = {0, 0}, .extent = extent},
       .layerCount = 1,
       .colorAttachmentCount = 1,
-      .pColorAttachments = &attachmentInfo};
+      .pColorAttachments = &colorAttachment,
+      .pDepthAttachment = &depthAttachment};
 
   commandBuffer.beginRendering(renderingInfo);
   commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline);
@@ -181,25 +227,23 @@ void VkRenderer::record_command_buffer(uint32_t imageIndex) {
   // After rendering, transition the swapchain image to
   // vk::ImageLayout::ePresentSrcKHR
   transition_image_layout(
-      imageIndex, vk::ImageLayout::eColorAttachmentOptimal,
-      vk::ImageLayout::ePresentSrcKHR,
+      swapchain.get_images()[imageIndex],
+      vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
       vk::AccessFlagBits2::eColorAttachmentWrite,         // srcAccessMask
       {},                                                 // dstAccessMask
       vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
-      vk::PipelineStageFlagBits2::eBottomOfPipe           // dstStage
-  );
+      vk::PipelineStageFlagBits2::eBottomOfPipe,          // dstStage
+      vk::ImageAspectFlagBits::eColor);
 
   commandBuffer.end();
 }
 
 void VkRenderer::transition_image_layout(
-    uint32_t imageIndex, vk::ImageLayout old_layout, vk::ImageLayout new_layout,
+    vk::Image image, vk::ImageLayout old_layout, vk::ImageLayout new_layout,
     vk::AccessFlags2 src_access_mask, vk::AccessFlags2 dst_access_mask,
     vk::PipelineStageFlags2 src_stage_mask,
-    vk::PipelineStageFlags2 dst_stage_mask) {
-
-  // Used to trasition the image layout before and after rendering (undefined
-  // <-> color attachement)
+    vk::PipelineStageFlags2 dst_stage_mask,
+    vk::ImageAspectFlags image_aspect_flags) {
   vk::ImageMemoryBarrier2 barrier = {
       .srcStageMask = src_stage_mask,
       .srcAccessMask = src_access_mask,
@@ -209,8 +253,8 @@ void VkRenderer::transition_image_layout(
       .newLayout = new_layout,
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = swapchain.get_images()[imageIndex],
-      .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor,
+      .image = image,
+      .subresourceRange = {.aspectMask = image_aspect_flags,
                            .baseMipLevel = 0,
                            .levelCount = 1,
                            .baseArrayLayer = 0,
@@ -222,17 +266,15 @@ void VkRenderer::transition_image_layout(
 }
 
 void VkRenderer::create_sync_objects() {
-  assert(presentCompleteSemaphores.empty() &&
-         renderFinishedSemaphores.empty() && inFlightFences.empty());
+  assert(acquireSemaphores.empty() && submitSemaphores.empty() &&
+         inFlightFences.empty());
 
   for (size_t i = 0; i < swapchain.get_images().size(); i++) {
-    renderFinishedSemaphores.emplace_back(vkContext.device,
-                                          vk::SemaphoreCreateInfo());
+    submitSemaphores.emplace_back(vkContext.device, vk::SemaphoreCreateInfo());
   }
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    presentCompleteSemaphores.emplace_back(vkContext.device,
-                                           vk::SemaphoreCreateInfo());
+    acquireSemaphores.emplace_back(vkContext.device, vk::SemaphoreCreateInfo());
     inFlightFences.emplace_back(
         vkContext.device,
         vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
@@ -294,8 +336,9 @@ void VkRenderer::updateUniformBuffer(uint32_t currentImage, Camera *camera) {
   float time = std::chrono::duration<float>(currentTime - startTime).count();
 
   UniformBufferObject ubo{};
-  ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f),
-                     glm::vec3(0.0f, 0.0f, 1.0f));
+  ubo.model =
+      glm::mat4(1.0f); // rotate(glm::mat4(1.0f), time * glm::radians(90.0f),
+                       //        glm::vec3(0.0f, 0.0f, 1.0f));
   // ubo.view = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
   //                   glm::vec3(0.0f, 0.0f, 1.0f));
   // ubo.proj =

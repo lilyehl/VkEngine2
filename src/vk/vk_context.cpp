@@ -92,6 +92,7 @@ void VkContext::pick_physical_device() {
     throw std::runtime_error("failed to find a suitable GPU!");
   }
   physicalDevice = *devIter;
+  msaaSamples = get_max_usable_sample_count();
 }
 
 bool VkContext::is_device_suitable(
@@ -211,7 +212,7 @@ void VkContext::create_command_pool() {
 }
 
 uint32_t VkContext::find_memory_type(uint32_t typeFilter,
-                                     vk::MemoryPropertyFlags properties)
+                                     vk::MemoryPropertyFlags properties) const
 // finds memory type for a buffer according to app recquirements
 {
   // query for available types of memory
@@ -227,4 +228,33 @@ uint32_t VkContext::find_memory_type(uint32_t typeFilter,
   }
 
   throw std::runtime_error("failed to find suitable memory type!");
+}
+
+vk::SampleCountFlagBits VkContext::get_max_usable_sample_count() {
+  vk::PhysicalDeviceProperties physicalDeviceProperties =
+      physicalDevice.getProperties();
+
+  vk::SampleCountFlags counts =
+      physicalDeviceProperties.limits.framebufferColorSampleCounts &
+      physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+  if (counts & vk::SampleCountFlagBits::e64) {
+    return vk::SampleCountFlagBits::e64;
+  }
+  if (counts & vk::SampleCountFlagBits::e32) {
+    return vk::SampleCountFlagBits::e32;
+  }
+  if (counts & vk::SampleCountFlagBits::e16) {
+    return vk::SampleCountFlagBits::e16;
+  }
+  if (counts & vk::SampleCountFlagBits::e8) {
+    return vk::SampleCountFlagBits::e8;
+  }
+  if (counts & vk::SampleCountFlagBits::e4) {
+    return vk::SampleCountFlagBits::e4;
+  }
+  if (counts & vk::SampleCountFlagBits::e2) {
+    return vk::SampleCountFlagBits::e2;
+  }
+
+  return vk::SampleCountFlagBits::e1;
 }

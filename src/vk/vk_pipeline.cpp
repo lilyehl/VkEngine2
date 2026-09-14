@@ -95,8 +95,9 @@ PipelineBuilder::build(VkContext &vkContext, Swapchain &swapchain,
 
   // multisampling (disabled for now)
   vk::PipelineMultisampleStateCreateInfo multisampling{
-      .rasterizationSamples = vk::SampleCountFlagBits::e1,
-      .sampleShadingEnable = vk::False};
+      .rasterizationSamples = vkContext.msaaSamples,
+      //.sampleShadingEnable = vk::False
+  };
 
   // color blending
   vk::PipelineColorBlendAttachmentState colorBlendAttachment{
@@ -121,6 +122,14 @@ PipelineBuilder::build(VkContext &vkContext, Swapchain &swapchain,
   // specify uniform variables and push constants
   // TODO : add setter for pipeline layout
 
+  // depth buffering
+  vk::PipelineDepthStencilStateCreateInfo depthStencil{
+      .depthTestEnable = vk::True,
+      .depthWriteEnable = vk::True,
+      .depthCompareOp = vk::CompareOp::eLess,
+      .depthBoundsTestEnable = vk::False,
+      .stencilTestEnable = vk::False};
+
   // dynamic rendering
   vk::Format colorFormat = swapchain.get_surface_format().format;
   vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{
@@ -136,11 +145,14 @@ PipelineBuilder::build(VkContext &vkContext, Swapchain &swapchain,
            .pViewportState = &viewportState,
            .pRasterizationState = &rasterizer,
            .pMultisampleState = &multisampling,
+           .pDepthStencilState = &depthStencil,
            .pColorBlendState = &colorBlending,
            .pDynamicState = &dynamicState,
            .layout = pipelineLayout,
            .renderPass = nullptr},
-          {.colorAttachmentCount = 1, .pColorAttachmentFormats = &colorFormat}};
+          {.colorAttachmentCount = 1,
+           .pColorAttachmentFormats = &colorFormat,
+           .depthAttachmentFormat = (vk::Format)VK_FORMAT_D32_SFLOAT}};
 
   vk::raii::Pipeline graphicsPipeline = vk::raii::Pipeline(
       vkContext.device, nullptr,

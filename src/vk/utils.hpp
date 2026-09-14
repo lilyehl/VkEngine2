@@ -16,7 +16,7 @@ constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
 // temp ?
 struct Vertex {
-  glm::vec2 pos;
+  glm::vec3 pos;
   glm::vec3 color;
 
   static vk::VertexInputBindingDescription getBindingDescription() {
@@ -32,7 +32,7 @@ struct Vertex {
     return {{// position attribute
              {.location = 0,
               .binding = 0,
-              .format = vk::Format::eR32G32Sfloat,
+              .format = vk::Format::eR32G32B32Sfloat,
               .offset = offsetof(Vertex, pos)},
              // color attribute
              {.location = 1,

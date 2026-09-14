@@ -21,6 +21,8 @@ private:
       vk::KHRSwapchainExtensionName};
 
   std::vector<const char *> get_required_instance_extensions();
+  vk::SampleCountFlagBits
+  get_max_usable_sample_count(); // for multisample antialiasing
 
   void create_instance();
   bool is_device_suitable(vk::raii::PhysicalDevice const &PhysicalDevice);
@@ -36,11 +38,12 @@ public:
   vk::raii::Device device = nullptr;
   uint32_t queueIndex = ~0;
   vk::raii::CommandPool commandPool = nullptr;
+  vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1;
 
   VkContext() = default;
   VkContext(GLFWwindow *window);
 
   // buffer allocation helper
   uint32_t find_memory_type(uint32_t typeFilter,
-                            vk::MemoryPropertyFlags properties);
+                            vk::MemoryPropertyFlags properties) const;
 };

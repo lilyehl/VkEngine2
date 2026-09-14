@@ -33,8 +33,8 @@ private:
 
   std::vector<vk::raii::CommandBuffer> commandBuffers;
 
-  std::vector<vk::raii::Semaphore> presentCompleteSemaphores;
-  std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
+  std::vector<vk::raii::Semaphore> acquireSemaphores; // present complete
+  std::vector<vk::raii::Semaphore> submitSemaphores;  // render finished
   std::vector<vk::raii::Fence> inFlightFences;
 
   std::vector<vk::raii::Buffer> uniformBuffers;
@@ -60,12 +60,13 @@ private:
   void create_descriptor_pool();
   void create_descriptor_sets();
 
-  void transition_image_layout(uint32_t imageIndex, vk::ImageLayout old_layout,
+  void transition_image_layout(vk::Image image, vk::ImageLayout old_layout,
                                vk::ImageLayout new_layout,
                                vk::AccessFlags2 src_access_mask,
                                vk::AccessFlags2 dst_access_mask,
                                vk::PipelineStageFlags2 src_stage_mask,
-                               vk::PipelineStageFlags2 dst_stage_mask);
+                               vk::PipelineStageFlags2 dst_stage_mask,
+                               vk::ImageAspectFlags image_aspect_flags);
 
   void updateUniformBuffer(uint32_t currentImage, Camera *camera); // TEMP
 };
