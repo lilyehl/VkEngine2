@@ -8,6 +8,7 @@
 
 #include "../window.hpp"
 
+#include <cstdint>
 #include <memory>
 
 struct UniformBufferObject {
@@ -19,7 +20,7 @@ struct UniformBufferObject {
 class VkRenderer {
 public:
   bool framebufferResized = false;
-  void init(Window &window);
+  void init(Window &window, MeshData &voxels);
   void draw(Window &window, Camera *camera);
   void wait_idle(); // called before app destroys window
 
@@ -43,8 +44,8 @@ private:
 
   uint32_t frameIndex = 0;
 
-  // temp
-  Voxel voxel;
+  // currently mesh = terrain
+  Mesh voxelMesh;
 
   void create_sync_objects();
 

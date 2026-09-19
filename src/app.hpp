@@ -1,18 +1,16 @@
 #pragma once
 
 #include "camera.hpp"
-// #include "triangle.hpp"
+#include "terrain.hpp"
 #include "vk/vk_renderer.hpp"
 #include "window.hpp"
-
-// #include <chrono>
-#include <vector>
 
 class App {
 public:
   App() {
     window.init(&camera);
-    renderer.init(window);
+    terrain.generate();
+    renderer.init(window, terrain.voxels);
   }
   ~App() {}
 
@@ -27,7 +25,7 @@ public:
 
 private:
   Window window;
-  Camera camera{glm::vec3(0.0f, 0.0f, 2.0f)};
+  Camera camera{glm::vec3(5.0f, 5.0f, 35.0f)};
   VkRenderer renderer;
-  // Triangle triangle;
+  Terrain terrain;
 };

@@ -52,7 +52,7 @@ void Buffer::copy_buffer(VkContext &vkContext, vk::raii::Buffer &srcBuffer,
 void Buffer::create_vertex_buffer(VkContext &vkContext,
                                   vk::raii::Buffer &buffer,
                                   vk::raii::DeviceMemory &bufferMemory,
-                                  std::vector<Vertex> &vertices) {
+                                  Vertices &vertices) {
 
   // create staging buffer
   vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();

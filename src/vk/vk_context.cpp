@@ -171,7 +171,7 @@ void VkContext::create_logical_device() {
                      vk::PhysicalDeviceVulkan13Features,
                      vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
       featureChain = {
-          {},                             // vk::PhysicalDeviceFeatures2
+          {.features = {.geometryShader = true}}, // vk::PhysicalDeviceFeatures2
           {.shaderDrawParameters = true}, // vk::PhysicalDeviceVulkan11Features
           {.synchronization2 = true,
            .dynamicRendering = true}, // vk::PhysicalDeviceVulkan13Features

@@ -7,7 +7,7 @@
 
 #include <iostream>
 
-void VkRenderer::init(Window &window) {
+void VkRenderer::init(Window &window, MeshData &voxelData) {
   LOG("Initializing vulkan context...")
   vkContext = VkContext(window.window);
 
@@ -31,8 +31,8 @@ void VkRenderer::init(Window &window) {
                                  uniformBuffers, uniformBuffersMemory,
                                  uniformBuffersMapped);
 
-  LOG("Recording the single buffer, once for now")
-  voxel = Voxel(vkContext);
+  LOG("Recording voxel mesh")
+  voxelMesh = Mesh(vkContext, voxelData);
 
   create_descriptor_pool();
   create_descriptor_sets();
@@ -210,16 +210,16 @@ void VkRenderer::record_command_buffer(uint32_t imageIndex) {
 
   commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline);
 
-  commandBuffer.bindVertexBuffers(0, *voxel.vertexBuffer, {0});
+  commandBuffer.bindVertexBuffers(0, *voxelMesh.vertexBuffer, {0});
   commandBuffer.bindIndexBuffer(
-      *voxel.indexBuffer, 0,
-      vk::IndexTypeValue<decltype(voxel.indices)::value_type>::value);
+      *voxelMesh.indexBuffer, 0,
+      vk::IndexTypeValue<decltype(MeshData::indices)::value_type>::value);
 
   commandBuffers[frameIndex].bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, pipelineLayout, 0,
       *descriptorSets[frameIndex], nullptr);
-  commandBuffer.drawIndexed(static_cast<uint32_t>(voxel.indices.size()), 1, 0,
-                            0, 0);
+  commandBuffer.drawIndexed(
+      static_cast<uint32_t>(voxelMesh.meshData->indices.size()), 1, 0, 0, 0);
 
   // clean uo
   commandBuffer.endRendering();
