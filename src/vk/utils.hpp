@@ -10,6 +10,9 @@
 #include <cstdlib>
 #include <iostream>
 
+#include <cmath>
+#include <vector>
+
 #define LOG(msg) std::cout << msg << std::endl;
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;

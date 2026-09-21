@@ -1,9 +1,8 @@
 #pragma once
 
+#include "vk/utils.hpp"
 #include "vk/vk_mesh.hpp"
 #include "window.hpp"
-#include <glm/glm.hpp>
-#include <vector>
 
 // stick this into a vertex shader ? only send in coordinates of the voxels ?
 struct Voxel {
@@ -34,33 +33,24 @@ struct Voxel {
   }
 };
 
+class Perlin {
+public:
+  // 5th order interpolation solves discontinuous continuity
+  static float fade(float t);
+
+  static uint pcg_hash(uint input);
+
+  static float noise(float x, float y);
+};
+
 class Terrain {
 public:
   MeshData voxels;
   int WIDTH, HEIGHT;
+  float SCALE;
 
-  Terrain(int width = 15, int height = 15) : WIDTH(width), HEIGHT(height) {};
+  Terrain(int width = 100, int height = 0, int scale = 5)
+      : WIDTH(width), HEIGHT(height), SCALE(scale) {};
 
-  void generate() {
-    // perlin noise
-
-    // cubes to coords
-
-    // temp stupid setup of just 1 cube
-    for (int x = 0; x < WIDTH; ++x) {
-      for (int z = 0; z < WIDTH; ++z) {
-
-        Voxel v = Voxel({x, 0, z});
-        uint16_t baseIdx = static_cast<uint16_t>(voxels.vertices.size());
-
-        voxels.vertices.insert(voxels.vertices.end(), v.vertices.begin(),
-                               v.vertices.end());
-
-        for (auto idx : v.indices)
-          voxels.indices.push_back(baseIdx + idx);
-      }
-    }
-  }
-
-private:
+  void generate();
 };

@@ -6,6 +6,7 @@ target_sources(app
     PRIVATE
     window.cpp
     camera.cpp
+    terrain.cpp
 )
 
 target_link_libraries(app
