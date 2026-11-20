@@ -1,35 +1,11 @@
 #pragma once
 
+#include "res/vk_vertex.hpp"
 #include "utils.hpp"
 #include "vk_context.hpp"
 
-using Vert = glm::vec3; // in case I want to make it a struct later
-using Vertices = std::vector<glm::vec3>;
-
-namespace Vertex {
-
-static vk::VertexInputBindingDescription getBindingDescription() {
-  // describes at which rate to load data from memory throughout vertices
-  return {.binding = 0,
-          .stride = sizeof(Vert),
-          .inputRate = vk::VertexInputRate::eVertex}; // per-vertex data
-}
-
-static std::array<vk::VertexInputAttributeDescription, 1>
-getAttributeDescriptions() {
-  // describes how to extraxt a vertex attribute from a chunk of vertex data
-  return {{
-      // position attribute
-      {.location = 0,
-       .binding = 0,
-       .format = vk::Format::eR32G32B32Sfloat,
-       .offset = 0},
-  }};
-}
-} // namespace Vertex
-
 namespace Buffer {
-static std::pair<vk::raii::Buffer, vk::raii::DeviceMemory>
+std::pair<vk::raii::Buffer, vk::raii::DeviceMemory>
 create_buffer(VkContext &vkContext, vk::DeviceSize size,
               vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties);
 

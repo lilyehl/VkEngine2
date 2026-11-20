@@ -46,4 +46,6 @@ public:
   // buffer allocation helper
   uint32_t find_memory_type(uint32_t typeFilter,
                             vk::MemoryPropertyFlags properties) const;
+  vk::raii::CommandBuffer begin_single_time_commands() const;
+  void end_single_time_commands(vk::raii::CommandBuffer &commandBuffer) const;
 };

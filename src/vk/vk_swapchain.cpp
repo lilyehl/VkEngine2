@@ -1,5 +1,6 @@
 #include "vk_swapchain.hpp"
 #include "vk_context.hpp"
+#include "vk_image.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <limits>
@@ -105,55 +106,10 @@ void Swapchain::create_image_views(const VkContext &vkContext) {
   swapChainImageViews.reserve(swapChainImages.size());
   for (auto &image : swapChainImages) {
     swapChainImageViews.emplace_back(
-        create_image_view(vkContext, image, swapChainSurfaceFormat.format,
-                          vk::ImageAspectFlagBits::eColor));
+        Image::create_image_view(vkContext, image,
+                                 swapChainSurfaceFormat.format,
+                                 vk::ImageAspectFlagBits::eColor));
   }
-}
-
-vk::raii::ImageView
-Swapchain::create_image_view(VkContext const &vkContext, vk::Image const &image,
-                             vk::Format format,
-                             vk::ImageAspectFlags aspectFlags) {
-  vk::ImageViewCreateInfo viewInfo{
-      .image = image,
-      .viewType = vk::ImageViewType::e2D,
-      .format = format,
-      .subresourceRange = {.aspectMask = aspectFlags,
-                           .baseMipLevel = 0,
-                           .levelCount = 1,
-                           .baseArrayLayer = 0,
-                           .layerCount = 1}};
-  return vk::raii::ImageView(vkContext.device, viewInfo);
-}
-
-std::pair<vk::raii::Image, vk::raii::DeviceMemory>
-Swapchain::create_image(const VkContext &vkContext, uint32_t width,
-                        uint32_t height, vk::SampleCountFlagBits numSamples,
-                        vk::Format format, vk::ImageTiling tiling,
-                        vk::ImageUsageFlags usage,
-                        vk::MemoryPropertyFlags properties) {
-  vk::ImageCreateInfo imageInfo{.imageType = vk::ImageType::e2D,
-                                .format = format,
-                                .extent = {width, height, 1},
-                                .mipLevels = 1,
-                                .arrayLayers = 1,
-                                .samples = numSamples,
-                                .tiling = tiling,
-                                .usage = usage,
-                                .sharingMode = vk::SharingMode::eExclusive};
-
-  vk::raii::Image image = vk::raii::Image(vkContext.device, imageInfo);
-
-  vk::MemoryRequirements memRequirements = image.getMemoryRequirements();
-  vk::MemoryAllocateInfo allocInfo{
-      .allocationSize = memRequirements.size,
-      .memoryTypeIndex = vkContext.find_memory_type(
-          memRequirements.memoryTypeBits, properties)};
-  vk::raii::DeviceMemory imageMemory =
-      vk::raii::DeviceMemory(vkContext.device, allocInfo);
-  image.bindMemory(imageMemory, 0);
-
-  return {std::move(image), std::move(imageMemory)};
 }
 
 void Swapchain::recreate_swapchain(const VkContext &vkContext,
@@ -181,24 +137,24 @@ void Swapchain::create_depth_resources(const VkContext &vkContext) {
   // assuming support for vk::Format::eD32Sfloat, could be checked for
   vk::Format depthFormat = vk::Format::eD32Sfloat;
 
-  std::tie(depthImage, depthImageMemory) = create_image(
+  std::tie(depthImage, depthImageMemory) = Image::create_image(
       vkContext, swapChainExtent.width, swapChainExtent.height,
       vkContext.msaaSamples, depthFormat, vk::ImageTiling::eOptimal,
       vk::ImageUsageFlagBits::eDepthStencilAttachment,
       vk::MemoryPropertyFlagBits::eDeviceLocal);
-  depthImageView = create_image_view(vkContext, depthImage, depthFormat,
-                                     vk::ImageAspectFlagBits::eDepth);
+  depthImageView = Image::create_image_view(vkContext, depthImage, depthFormat,
+                                            vk::ImageAspectFlagBits::eDepth);
 }
 
 void Swapchain::create_color_resources(const VkContext &vkContext) {
   vk::Format colorFormat = swapChainSurfaceFormat.format;
 
-  std::tie(colorImage, colorImageMemory) = create_image(
+  std::tie(colorImage, colorImageMemory) = Image::create_image(
       vkContext, swapChainExtent.width, swapChainExtent.height,
       vkContext.msaaSamples, colorFormat, vk::ImageTiling::eOptimal,
       vk::ImageUsageFlagBits::eTransientAttachment |
           vk::ImageUsageFlagBits::eColorAttachment,
       vk::MemoryPropertyFlagBits::eDeviceLocal);
-  colorImageView = create_image_view(vkContext, colorImage, colorFormat,
-                                     vk::ImageAspectFlagBits::eColor);
+  colorImageView = Image::create_image_view(vkContext, colorImage, colorFormat,
+                                            vk::ImageAspectFlagBits::eColor);
 }

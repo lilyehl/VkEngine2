@@ -1,4 +1,6 @@
 #include "vk_renderer.hpp"
+#include "vk_image.hpp"
+#include "vk_pipeline.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -14,18 +16,42 @@ void VkRenderer::init(Window &window, MeshData &voxelData) {
   LOG("Creating a swapchain...")
   swapchain = Swapchain(vkContext, window.window);
 
-  LOG("Creating descriptor set layout..");
-  create_descriptor_set_layout();
+  LOG("Initializing logger...");
+  logger.init(vkContext);
+
+  LOG("Creating logger pipeline..")
+  // overlay a test 2d texture on screen
+  logger.get_pipeline() =
+      PipelineBuilder()
+          .set_shader("shaders/texture.spv")
+          .set_vertex_input(Vertex2D::description())
+          .set_depth_test(false, false)
+          .set_cull_mode(vk::CullModeFlagBits::eNone)
+          .set_blending(true)
+          .build(vkContext, swapchain, logger.get_pipeline_layout());
+
+  // TODO : move this to the terrain class ?
+  LOG("Creating descriptors..");
+  descriptors
+      .add_binding(0, vk::DescriptorType::eUniformBuffer,
+                   vk::ShaderStageFlagBits::eVertex)
+
+      .build(vkContext, MAX_FRAMES_IN_FLIGHT);
+
   vk::PipelineLayoutCreateInfo pipelineLayoutInfo{.setLayoutCount = 1,
                                                   .pSetLayouts =
-                                                      &*descriptorSetLayout,
+                                                      &*descriptors.layout(),
                                                   .pushConstantRangeCount = 0};
 
   pipelineLayout =
       vk::raii::PipelineLayout(vkContext.device, pipelineLayoutInfo);
 
-  LOG("Creating graphics pipeline..") // will be moved later
-  pipeline = pipelineBuilder.build(vkContext, swapchain, pipelineLayout);
+  LOG("Creating graphics pipeline..")
+  // 3d voxels (depth on, back-face culling, no blend)
+  pipeline = PipelineBuilder()
+                 .set_shader("shaders/voxel.spv")
+                 .set_vertex_input(Vertex::description())
+                 .build(vkContext, swapchain, pipelineLayout);
 
   Buffer::create_uniform_buffers(vkContext, sizeof(UniformBufferObject),
                                  uniformBuffers, uniformBuffersMemory,
@@ -34,8 +60,8 @@ void VkRenderer::init(Window &window, MeshData &voxelData) {
   LOG("Recording voxel mesh")
   voxelMesh = Mesh(vkContext, voxelData);
 
-  create_descriptor_pool();
-  create_descriptor_sets();
+  // needs the uniform buffers to exist
+  write_descriptor_sets();
 
   LOG("Initializing sync objects and command buffer...")
   create_command_buffers();
@@ -81,8 +107,8 @@ void VkRenderer::draw(Window &window, Camera *camera) {
 
   record_command_buffer(imageIndex);
 
-  // TEMPORARY
   updateUniformBuffer(frameIndex, camera);
+  logger.update(frameIndex);
 
   // submit command buffer to graphics queue
   vk::PipelineStageFlags waitDestinationStageMask(
@@ -135,9 +161,9 @@ void VkRenderer::record_command_buffer(uint32_t imageIndex) {
 
   // Before starting rendering, transition the swapchain image to
   // vk::ImageLayout::eColorAttachmentOptimal
-  transition_image_layout(
-      swapchain.get_images()[imageIndex], vk::ImageLayout::eUndefined,
-      vk::ImageLayout::eColorAttachmentOptimal,
+  Image::transition_image_layout(
+      commandBuffer, swapchain.get_images()[imageIndex],
+      vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
       {}, // srcAccessMask (no need to wait for previous operations)
       vk::AccessFlagBits2::eColorAttachmentWrite,         // dstAccessMask
       vk::PipelineStageFlagBits2::eColorAttachmentOutput, // srcStage
@@ -146,26 +172,26 @@ void VkRenderer::record_command_buffer(uint32_t imageIndex) {
 
   // Transition the multisampled color image to
   // vk::ImageLayout::eColorAttachmentOptimal
-  transition_image_layout(*(swapchain.get_color_image()),
-                          vk::ImageLayout::eUndefined,
-                          vk::ImageLayout::eColorAttachmentOptimal,
-                          vk::AccessFlagBits2::eColorAttachmentWrite,
-                          vk::AccessFlagBits2::eColorAttachmentWrite,
-                          vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-                          vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-                          vk::ImageAspectFlagBits::eColor);
+  Image::transition_image_layout(
+      commandBuffer, *(swapchain.get_color_image()),
+      vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
+      vk::AccessFlagBits2::eColorAttachmentWrite,
+      vk::AccessFlagBits2::eColorAttachmentWrite,
+      vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+      vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+      vk::ImageAspectFlagBits::eColor);
 
   // Transition depth image to depth attachment optimal layout
-  transition_image_layout(*(swapchain.get_depth_image()),
-                          vk::ImageLayout::eUndefined,
-                          vk::ImageLayout::eDepthAttachmentOptimal,
-                          vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-                          vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-                          vk::PipelineStageFlagBits2::eEarlyFragmentTests |
-                              vk::PipelineStageFlagBits2::eLateFragmentTests,
-                          vk::PipelineStageFlagBits2::eEarlyFragmentTests |
-                              vk::PipelineStageFlagBits2::eLateFragmentTests,
-                          vk::ImageAspectFlagBits::eDepth);
+  Image::transition_image_layout(
+      commandBuffer, *(swapchain.get_depth_image()),
+      vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthAttachmentOptimal,
+      vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+      vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+      vk::PipelineStageFlagBits2::eEarlyFragmentTests |
+          vk::PipelineStageFlagBits2::eLateFragmentTests,
+      vk::PipelineStageFlagBits2::eEarlyFragmentTests |
+          vk::PipelineStageFlagBits2::eLateFragmentTests,
+      vk::ImageAspectFlagBits::eDepth);
 
   // color attachment (multisampled) with resolve attachment
   vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
@@ -217,17 +243,20 @@ void VkRenderer::record_command_buffer(uint32_t imageIndex) {
 
   commandBuffers[frameIndex].bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, pipelineLayout, 0,
-      *descriptorSets[frameIndex], nullptr);
+      *descriptors.set(frameIndex), nullptr);
   commandBuffer.drawIndexed(
       static_cast<uint32_t>(voxelMesh.meshData->indices.size()), 1, 0, 0, 0);
+
+  // overlay last, on top of the scene (its pipeline ignores depth)
+  logger.draw(commandBuffer, frameIndex);
 
   // clean uo
   commandBuffer.endRendering();
 
   // After rendering, transition the swapchain image to
   // vk::ImageLayout::ePresentSrcKHR
-  transition_image_layout(
-      swapchain.get_images()[imageIndex],
+  Image::transition_image_layout(
+      commandBuffer, swapchain.get_images()[imageIndex],
       vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
       vk::AccessFlagBits2::eColorAttachmentWrite,         // srcAccessMask
       {},                                                 // dstAccessMask
@@ -236,33 +265,6 @@ void VkRenderer::record_command_buffer(uint32_t imageIndex) {
       vk::ImageAspectFlagBits::eColor);
 
   commandBuffer.end();
-}
-
-void VkRenderer::transition_image_layout(
-    vk::Image image, vk::ImageLayout old_layout, vk::ImageLayout new_layout,
-    vk::AccessFlags2 src_access_mask, vk::AccessFlags2 dst_access_mask,
-    vk::PipelineStageFlags2 src_stage_mask,
-    vk::PipelineStageFlags2 dst_stage_mask,
-    vk::ImageAspectFlags image_aspect_flags) {
-  vk::ImageMemoryBarrier2 barrier = {
-      .srcStageMask = src_stage_mask,
-      .srcAccessMask = src_access_mask,
-      .dstStageMask = dst_stage_mask,
-      .dstAccessMask = dst_access_mask,
-      .oldLayout = old_layout,
-      .newLayout = new_layout,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = image,
-      .subresourceRange = {.aspectMask = image_aspect_flags,
-                           .baseMipLevel = 0,
-                           .levelCount = 1,
-                           .baseArrayLayer = 0,
-                           .layerCount = 1}};
-  vk::DependencyInfo dependency_info = {.dependencyFlags = {},
-                                        .imageMemoryBarrierCount = 1,
-                                        .pImageMemoryBarriers = &barrier};
-  commandBuffers[frameIndex].pipelineBarrier2(dependency_info);
 }
 
 void VkRenderer::create_sync_objects() {
@@ -281,51 +283,11 @@ void VkRenderer::create_sync_objects() {
   }
 }
 
-// Descriptor set layout for mvp matrice
-void VkRenderer::create_descriptor_set_layout() {
-  vk::DescriptorSetLayoutBinding uboLayoutBinding{
-      .binding = 0,
-      .descriptorType = vk::DescriptorType::eUniformBuffer,
-      .descriptorCount = 1,
-      .stageFlags = vk::ShaderStageFlagBits::eVertex};
-
-  vk::DescriptorSetLayoutCreateInfo layoutInfo{.bindingCount = 1,
-                                               .pBindings = &uboLayoutBinding};
-  descriptorSetLayout =
-      vk::raii::DescriptorSetLayout(vkContext.device, layoutInfo);
-}
-
-void VkRenderer::create_descriptor_pool() {
-  vk::DescriptorPoolSize poolSize{.type = vk::DescriptorType::eUniformBuffer,
-                                  .descriptorCount = MAX_FRAMES_IN_FLIGHT};
-  vk::DescriptorPoolCreateInfo poolInfo{
-      .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-      .maxSets = MAX_FRAMES_IN_FLIGHT,
-      .poolSizeCount = 1,
-      .pPoolSizes = &poolSize};
-  descriptorPool = vk::raii::DescriptorPool(vkContext.device, poolInfo);
-}
-
-void VkRenderer::create_descriptor_sets() {
-  std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT,
-                                               *descriptorSetLayout);
-  vk::DescriptorSetAllocateInfo allocInfo{
-      .descriptorPool = descriptorPool,
-      .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
-      .pSetLayouts = layouts.data()};
-  descriptorSets = vkContext.device.allocateDescriptorSets(allocInfo);
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    vk::DescriptorBufferInfo bufferInfo{.buffer = uniformBuffers[i],
-                                        .offset = 0,
-                                        .range = sizeof(UniformBufferObject)};
-    vk::WriteDescriptorSet descriptorWrite{
-        .dstSet = descriptorSets[i],
-        .dstBinding = 0,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = vk::DescriptorType::eUniformBuffer,
-        .pBufferInfo = &bufferInfo};
-    vkContext.device.updateDescriptorSets(descriptorWrite, {});
+void VkRenderer::write_descriptor_sets() {
+  // terrain only has the ubo; the logger writes its own texture descriptor
+  for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    descriptors.write_buffer(vkContext, i, 0, uniformBuffers[i],
+                             sizeof(UniformBufferObject));
   }
 }
 

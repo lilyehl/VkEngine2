@@ -52,15 +52,4 @@ private:
   void create_image_views(const VkContext &vkContext);
   void create_depth_resources(const VkContext &vkContext);
   void create_color_resources(const VkContext &vkContext);
-
-  vk::raii::ImageView create_image_view(const VkContext &vkContext,
-                                        vk::Image const &image,
-                                        vk::Format format,
-                                        vk::ImageAspectFlags aspectFlags);
-
-  std::pair<vk::raii::Image, vk::raii::DeviceMemory>
-  create_image(const VkContext &vkContext, uint32_t width, uint32_t height,
-               vk::SampleCountFlagBits numSamples, vk::Format format,
-               vk::ImageTiling tiling, vk::ImageUsageFlags usage,
-               vk::MemoryPropertyFlags properties);
 };

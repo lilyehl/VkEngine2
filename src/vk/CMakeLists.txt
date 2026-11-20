@@ -36,8 +36,10 @@ target_sources(vk_wrapper
         vk/vk_pipeline.cpp
         vk/vk_buffers.cpp
         vk/vk_image.cpp
-        vk/resources/vk_mesh.cpp
-        vk/resources/vk_texture.cpp
+        vk/vk_descriptors.cpp
+        vk/vk_logger.cpp
+        vk/res/vk_mesh.cpp
+        vk/res/vk_texture.cpp
 )
 
 target_include_directories(vk_wrapper PUBLIC

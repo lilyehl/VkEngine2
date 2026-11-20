@@ -33,7 +33,7 @@ PipelineBuilder::build(VkContext &vkContext, Swapchain &swapchain,
                        vk::raii::PipelineLayout &pipelineLayout) {
 
   // load shaders
-  auto shaderModule = load_shader_module("shaders/slang.spv", vkContext.device);
+  auto shaderModule = load_shader_module(shaderPath, vkContext.device);
   vk::PipelineShaderStageCreateInfo vertShaderStageInfo{
       .stage = vk::ShaderStageFlagBits::eVertex,
       .module = shaderModule,
@@ -45,16 +45,16 @@ PipelineBuilder::build(VkContext &vkContext, Swapchain &swapchain,
   vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo,
                                                       fragShaderStageInfo};
 
-  // vertex stage
-  auto bindingDescription = Vertex::getBindingDescription();
-  auto attributeDescriptions = Vertex::getAttributeDescriptions();
+  // vertex stage (no attributes = no vertex buffer bound)
+  bool hasVertexInput = !vertexInput.attributes.empty();
 
   vk::PipelineVertexInputStateCreateInfo vertexInputInfo{
-      .vertexBindingDescriptionCount = 1,
-      .pVertexBindingDescriptions = &bindingDescription,
+      .vertexBindingDescriptionCount = hasVertexInput ? 1u : 0u,
+      .pVertexBindingDescriptions =
+          hasVertexInput ? &vertexInput.binding : nullptr,
       .vertexAttributeDescriptionCount =
-          static_cast<uint32_t>(attributeDescriptions.size()),
-      .pVertexAttributeDescriptions = attributeDescriptions.data()};
+          static_cast<uint32_t>(vertexInput.attributes.size()),
+      .pVertexAttributeDescriptions = vertexInput.attributes.data()};
 
   // topology
   vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
@@ -68,18 +68,8 @@ PipelineBuilder::build(VkContext &vkContext, Swapchain &swapchain,
       .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
       .pDynamicStates = dynamicStates.data()};
 
-  // viewport and scissors
-  const vk::Extent2D &swapChainExtent = swapchain.get_extent();
-
-  vk::Viewport viewport{0.0f,
-                        0.0f,
-                        static_cast<float>(swapChainExtent.width),
-                        static_cast<float>(swapChainExtent.height),
-                        0.0f,
-                        1.0f};
-  vk::Rect2D scissor{vk::Offset2D{0, 0},
-                     swapChainExtent}; // same size as viewport
-
+  // viewport and scissor are dynamic (set each frame in the command buffer),
+  // only their count is baked into the pipeline
   vk::PipelineViewportStateCreateInfo viewportState{.viewportCount = 1,
                                                     .scissorCount = 1};
 
@@ -88,7 +78,7 @@ PipelineBuilder::build(VkContext &vkContext, Swapchain &swapchain,
       .depthClampEnable = vk::False,
       .rasterizerDiscardEnable = vk::False,
       .polygonMode = vk::PolygonMode::eFill,
-      .cullMode = vk::CullModeFlagBits::eBack,
+      .cullMode = cullMode,
       .frontFace = vk::FrontFace::eCounterClockwise,
       .depthBiasEnable = vk::False,
       .lineWidth = 1.0f};
@@ -101,7 +91,7 @@ PipelineBuilder::build(VkContext &vkContext, Swapchain &swapchain,
 
   // color blending
   vk::PipelineColorBlendAttachmentState colorBlendAttachment{
-      .blendEnable = vk::True,
+      .blendEnable = blendEnable,
       .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
       .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
       .colorBlendOp = vk::BlendOp::eAdd,
@@ -124,16 +114,15 @@ PipelineBuilder::build(VkContext &vkContext, Swapchain &swapchain,
 
   // depth buffering
   vk::PipelineDepthStencilStateCreateInfo depthStencil{
-      .depthTestEnable = vk::True,
-      .depthWriteEnable = vk::True,
+      .depthTestEnable = depthTestEnable,
+      .depthWriteEnable = depthWriteEnable,
       .depthCompareOp = vk::CompareOp::eLess,
       .depthBoundsTestEnable = vk::False,
       .stencilTestEnable = vk::False};
 
-  // dynamic rendering
+  // dynamic rendering: attachment formats must match the ones used in
+  // beginRendering
   vk::Format colorFormat = swapchain.get_surface_format().format;
-  vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{
-      .colorAttachmentCount = 1, .pColorAttachmentFormats = &colorFormat};
 
   vk::StructureChain<vk::GraphicsPipelineCreateInfo,
                      vk::PipelineRenderingCreateInfo>
@@ -169,3 +158,32 @@ PipelineBuilder::build(VkContext &vkContext, Swapchain &swapchain,
 //
 //  return *this;
 //}
+
+PipelineBuilder &PipelineBuilder::set_shader(std::string shaderPath) {
+  this->shaderPath = shaderPath;
+
+  return *this;
+}
+
+PipelineBuilder &
+PipelineBuilder::set_vertex_input(VertexInputDescription vertexInput) {
+  this->vertexInput = std::move(vertexInput);
+  return *this;
+}
+
+PipelineBuilder &PipelineBuilder::set_depth_test(bool testEnable,
+                                                 bool writeEnable) {
+  depthTestEnable = testEnable;
+  depthWriteEnable = writeEnable;
+  return *this;
+}
+
+PipelineBuilder &PipelineBuilder::set_cull_mode(vk::CullModeFlags cullMode) {
+  this->cullMode = cullMode;
+  return *this;
+}
+
+PipelineBuilder &PipelineBuilder::set_blending(bool enable) {
+  blendEnable = enable;
+  return *this;
+}

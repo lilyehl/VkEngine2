@@ -1,8 +1,10 @@
 #pragma once
 
+#include "res/vk_mesh.hpp"
 #include "vk_buffers.hpp"
 #include "vk_context.hpp"
-#include "vk_mesh.hpp"
+#include "vk_descriptors.hpp"
+#include "vk_logger.hpp"
 #include "vk_pipeline.hpp"
 #include "vk_swapchain.hpp"
 
@@ -20,24 +22,32 @@ struct UniformBufferObject {
 class VkRenderer {
 public:
   bool framebufferResized = false;
-  void init(Window &window, MeshData &voxels);
+
+  void init(Window &window, MeshData &voxelData);
   void draw(Window &window, Camera *camera);
+  void update_logger(Window &Window);
+
   void wait_idle(); // called before app destroys window
 
 private:
   VkContext vkContext;
   Swapchain swapchain;
-  // Camera camera;
 
-  PipelineBuilder pipelineBuilder;
+  Logger logger;
+
   vk::raii::Pipeline pipeline = nullptr;
+  vk::raii::PipelineLayout pipelineLayout = nullptr;
+
+  Descriptors descriptors; // one set per frame in flight
 
   std::vector<vk::raii::CommandBuffer> commandBuffers;
 
+  // Sync objects
   std::vector<vk::raii::Semaphore> acquireSemaphores; // present complete
   std::vector<vk::raii::Semaphore> submitSemaphores;  // render finished
   std::vector<vk::raii::Fence> inFlightFences;
 
+  // Uniform buffer
   std::vector<vk::raii::Buffer> uniformBuffers;
   std::vector<vk::raii::DeviceMemory> uniformBuffersMemory;
   std::vector<void *> uniformBuffersMapped;
@@ -52,22 +62,7 @@ private:
   void create_command_buffers();
   void record_command_buffer(uint32_t imageIndex);
 
-  // not sure where to put these yet (a potential renderer ?)
-  vk::raii::PipelineLayout pipelineLayout = nullptr;
-  vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
-  vk::raii::DescriptorPool descriptorPool = nullptr;
-  std::vector<vk::raii::DescriptorSet> descriptorSets;
-  void create_descriptor_set_layout();
-  void create_descriptor_pool();
-  void create_descriptor_sets();
-
-  void transition_image_layout(vk::Image image, vk::ImageLayout old_layout,
-                               vk::ImageLayout new_layout,
-                               vk::AccessFlags2 src_access_mask,
-                               vk::AccessFlags2 dst_access_mask,
-                               vk::PipelineStageFlags2 src_stage_mask,
-                               vk::PipelineStageFlags2 dst_stage_mask,
-                               vk::ImageAspectFlags image_aspect_flags);
+  void write_descriptor_sets();
 
   void updateUniformBuffer(uint32_t currentImage, Camera *camera); // TEMP
 };

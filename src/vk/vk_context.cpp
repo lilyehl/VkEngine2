@@ -129,6 +129,8 @@ bool VkContext::is_device_suitable(
       vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
 
   bool supportsRequiredFeatures =
+      features.template get<vk::PhysicalDeviceFeatures2>()
+          .features.samplerAnisotropy &&
       features.template get<vk::PhysicalDeviceVulkan11Features>()
           .shaderDrawParameters &&
       features.template get<vk::PhysicalDeviceVulkan13Features>()
@@ -171,13 +173,14 @@ void VkContext::create_logical_device() {
                      vk::PhysicalDeviceVulkan13Features,
                      vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
       featureChain = {
-          {.features = {.geometryShader = true}}, // vk::PhysicalDeviceFeatures2
+          {.features = {.geometryShader = true,
+                        .samplerAnisotropy = true}}, // vk::PhysicalDeviceFeatures2
           {.shaderDrawParameters = true}, // vk::PhysicalDeviceVulkan11Features
           {.synchronization2 = true,
            .dynamicRendering = true}, // vk::PhysicalDeviceVulkan13Features
           {.extendedDynamicState =
                true} // vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
-      };
+  };
 
   // create a Device
   float queuePriority = 0.5f;
@@ -257,4 +260,26 @@ vk::SampleCountFlagBits VkContext::get_max_usable_sample_count() {
   }
 
   return vk::SampleCountFlagBits::e1;
+}
+
+vk::raii::CommandBuffer VkContext::begin_single_time_commands() const {
+  vk::CommandBufferAllocateInfo allocInfo{.commandPool = commandPool,
+                                          .level =
+                                              vk::CommandBufferLevel::ePrimary,
+                                          .commandBufferCount = 1};
+  vk::raii::CommandBuffer commandBuffer =
+      std::move(vk::raii::CommandBuffers(device, allocInfo).front());
+
+  commandBuffer.begin(
+      {.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+  return commandBuffer;
+}
+
+void VkContext::end_single_time_commands(
+    vk::raii::CommandBuffer &commandBuffer) const {
+  commandBuffer.end();
+  vk::SubmitInfo submitInfo{.commandBufferCount = 1,
+                            .pCommandBuffers = &*commandBuffer};
+  queue.submit(submitInfo, nullptr);
+  queue.waitIdle();
 }

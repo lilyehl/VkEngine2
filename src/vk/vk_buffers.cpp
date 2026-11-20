@@ -28,25 +28,9 @@ void Buffer::copy_buffer(VkContext &vkContext, vk::raii::Buffer &srcBuffer,
   // allocating a temporary command buffer
   // TODO : allocate a small, separate command pool for temp buffers (w/
   // eTransient flag for memory optimisations )
-  vk::CommandBufferAllocateInfo allocInfo{.commandPool = vkContext.commandPool,
-                                          .level =
-                                              vk::CommandBufferLevel::ePrimary,
-                                          .commandBufferCount = 1};
-  vk::raii::CommandBuffer commandCopyBuffer =
-      std::move(vkContext.device.allocateCommandBuffers(allocInfo).front());
-  commandCopyBuffer.begin(
-      {.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-
-  // copy da buffa
-  commandCopyBuffer.copyBuffer(*srcBuffer, *dstBuffer,
-                               vk::BufferCopy(0, 0, size));
-  commandCopyBuffer.end();
-
-  // execute da buffa
-  vkContext.queue.submit(vk::SubmitInfo{.commandBufferCount = 1,
-                                        .pCommandBuffers = &*commandCopyBuffer},
-                         nullptr);
-  vkContext.queue.waitIdle();
+  auto cmd = vkContext.begin_single_time_commands();
+  cmd.copyBuffer(*srcBuffer, *dstBuffer, vk::BufferCopy(0, 0, size));
+  vkContext.end_single_time_commands(cmd);
 }
 
 void Buffer::create_vertex_buffer(VkContext &vkContext,

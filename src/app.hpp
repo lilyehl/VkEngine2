@@ -21,6 +21,7 @@ public:
       window.update();
       renderer.draw(window, &camera);
     }
+    renderer.wait_idle();
   }
 
 private:

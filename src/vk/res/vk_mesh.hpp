@@ -3,6 +3,7 @@
 #include "utils.hpp"
 #include "vk_buffers.hpp"
 #include "vk_context.hpp"
+#include "vk_vertex.hpp"
 
 struct MeshData {
   Vertices vertices;
